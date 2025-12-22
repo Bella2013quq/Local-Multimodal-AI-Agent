@@ -2,7 +2,7 @@
 import os
 
 # api
-GEMINI_API_KEY = "AIzaSyCRK_YjQlttq4aMbVhvqnQh2bpZzQcZ6KA" 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
 
 # 数据库和模型路径配置
 DB_PATH = "./my_knowledge_base"
