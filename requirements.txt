@@ -1,0 +1,9 @@
+chromadb
+google-generativeai
+pypdf
+pillow
+python-dotenv
+tqdm
+
+torch
+torchvision
