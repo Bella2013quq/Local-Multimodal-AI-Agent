@@ -7,6 +7,12 @@ from core.ai_handler import AIHandler
 from core.db_handler import DatabaseHandler
 from core.file_handler import read_pdf_chunks, move_file_to_category
 
+from dotenv import load_dotenv
+load_dotenv()   # 会自动读取 .env
+
+from core.config import GEMINI_API_KEY
+
+
 # 核心处理函数
 
 def process_paper(ai, db, file_path, topics):

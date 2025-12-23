@@ -4,6 +4,9 @@ pypdf
 pillow
 python-dotenv
 tqdm
+transformers
 
 torch
 torchvision
+
+git-filter-repo
