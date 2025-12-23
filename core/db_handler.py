@@ -1,4 +1,3 @@
-# core/db_handler.py
 import chromadb
 import os
 from .config import DB_PATH
@@ -27,8 +26,7 @@ class DatabaseHandler:
         )
 
     def check_paper_exists(self, filename):
-        """检查论文是否已存在 (通过 metadata 中的 source 字段)"""
-        # 使用 limit=1 只要找到一个切片即视为存在
+        """检查论文是否已存在"""
         existing = self.paper_collection.get(
             where={"source": filename}, 
             limit=1
@@ -36,19 +34,31 @@ class DatabaseHandler:
         return len(existing['ids']) > 0
 
     def check_image_exists(self, filename):
-        """检查图片是否已存在 (通过 ID 检查)"""
-        # 只需要检查 visual_collection 即可
+        """检查图片是否已存在"""
         existing = self.visual_collection.get(
             ids=[f"img_clip_{filename}"]
         )
         return len(existing['ids']) > 0
 
-    def add_paper_chunks(self, chunks, embeddings):
-        """存入论文切片 (使用 upsert 防止报错)"""
-        # 生成唯一 ID
+    def add_paper_chunks(self, chunks, embeddings, moved_path=None, category="Uncategorized"):
+        """
+        存入论文切片
+        :param moved_path: 文件移动后的新路径 
+        :param category: 论文分类 
+        """
         ids = [f"{c['source']}_p{c['page']}_{i}" for i, c in enumerate(chunks)]
         
-        metadatas = [{"source": c['source'], "page": c['page'], "path": c['path']} for c in chunks]
+        metadatas = []
+        for c in chunks:
+            final_path = moved_path if moved_path else c['path']
+            
+            metadatas.append({
+                "source": c['source'], 
+                "page": c['page'], 
+                "path": final_path,   
+                "category": category  
+            })
+
         documents = [c['text'] for c in chunks]
         
         self.paper_collection.upsert(
@@ -57,9 +67,9 @@ class DatabaseHandler:
             metadatas=metadatas, 
             documents=documents
         )
-        print(f"已更新/存入 {len(chunks)} 个片段到论文库")
+        print(f"已更新/存入 {len(chunks)} 个片段到论文库 (分类: {category})")
 
-    def add_image(self, image_path, clip_vec, description, gemini_vec):
+    def add_image(self, image_path, clip_vec, description, gemini_vec, category="Uncategorized"):
         """双路存入图片"""
         file_name = os.path.basename(image_path)
         
@@ -67,18 +77,26 @@ class DatabaseHandler:
         self.visual_collection.upsert(
             ids=[f"img_clip_{file_name}"], 
             embeddings=[clip_vec], 
-            metadatas=[{"path": image_path}]
+            metadatas=[{
+                "path": image_path, 
+                "category": category
+            }]
         )
         
         # 2. 存入图片描述库 (Gemini)
         self.image_desc_collection.upsert(
             ids=[f"img_desc_{file_name}"], 
             embeddings=[gemini_vec], 
-            documents=[description], # 这里存的是用于检索的内容
-            metadatas=[{"path": image_path, "desc": description}] 
+            documents=[description], 
+            metadatas=[{
+                "path": image_path, 
+                "desc": description, 
+                "category": category
+            }] 
         )
-        print(f"图片已双路更新/存入: {file_name}")
+        print(f"图片已双路更新/存入: {file_name} (分类: {category})")
 
+    # --- 搜索接口保持不变 ---
     def search_paper(self, query_vec, n_results=3):
         return self.paper_collection.query(query_embeddings=[query_vec], n_results=n_results)
 

@@ -20,75 +20,100 @@ def process_paper(ai, db, file_path, topics):
     filename = os.path.basename(file_path)
     print(f"\n[PDF] 正在处理: {filename}")
     
-    # 去重，检查数据库中是否已存在
+    # 1. 去重检查
     if db.check_paper_exists(filename):
-        print(f"[跳过]: 数据库中已存在该论文")
+        print(f"   [跳过]: 数据库中已存在该论文")
         return
 
-    # 1. 读取并分块
+    # 2. 读取并分块
     chunks = read_pdf_chunks(file_path)
     if not chunks: 
-        print("[跳过]: PDF 读取为空或失败")
+        print("   [跳过]: PDF 读取为空或失败")
         return
 
-    # 2. 生成向量
-    print("正在生成文本向量...")
+    # 3. 生成向量
+    print("   正在生成文本向量...")
     try:
         embeddings = [ai.get_gemini_embedding(c['text']) for c in chunks]
     except Exception as e:
-        print(f"[错误] 向量生成失败: {e}")
+        print(f"   [错误] 向量生成失败: {e}")
         return
     
-    # 3. 入库
-    db.add_paper_chunks(chunks, embeddings)
-
-    # 4. 智能分类
-    print("Gemini 正在阅读摘要并分类...")
+    # 4. 智能分类 & 移动文件
+    print("   Gemini 正在阅读摘要并分类...")
     first_page_text = chunks[0]['text'][:1000]
     prompt = f"请阅读以下论文摘要，并从这些类别中选择最合适的一个：[{topics}]。只返回类别名称，不要标点符号。\n\n摘要：{first_page_text}"
     
+    category = "Uncategorized"
     try:
         category = ai.chat_with_gemini(prompt).strip()
         category = category.replace("'", "").replace('"', "").replace(".", "")
-        print(f"分类结果: {category}")
+        print(f"   分类结果: {category}")
         
-        move_file_to_category(file_path, category)
-        print(f"处理完成。")
+        new_path = move_file_to_category(file_path, category, file_type="paper")
+        if new_path:
+            file_path = new_path 
+            
     except Exception as e:
-        print(f"[警告] 分类或移动失败，但已入库: {e}")
+        print(f"   [警告] 分类或移动失败: {e}")
 
-def process_image(ai, db, file_path):
+    # 5. 入库 必须在移动文件之后，确保路径是最新的
+    db.add_paper_chunks(chunks, embeddings, moved_path=file_path, category=category)
+    print("   论文处理完成。")
+
+
+def process_image(ai, db, file_path, topics="Screenshot,Diagram,Photo,Art,Infographic,Other"):
     """处理单张图片的逻辑"""
     filename = os.path.basename(file_path)
     print(f"\n[IMG] 正在处理: {filename}")
     
-    # 去重，检查数据库中是否已存在
+    # 1. 去重检查
     if db.check_image_exists(filename):
-        print(f"[跳过]: 数据库中已存在该图片")
+        print(f"   [跳过]: 数据库中已存在该图片")
         return
 
-    # 1. CLIP 向量
+    # 2. CLIP 向量
     try:
         clip_vec = ai.get_clip_embedding(file_path)
     except Exception as e:
-        print(f"[跳过]: CLIP处理失败 {e}")
+        print(f"   [跳过]: CLIP处理失败 {e}")
         return
 
-    # 2. Gemini 描述
-    print("Gemini 正在观察图片...")
+    # 3. Gemini 描述
+    print("   Gemini 正在观察图片...")
     try:
         desc = ai.get_image_description(file_path)
-        print(f"描述: {desc[:30]}...")
+        print(f"   描述: {desc[:30]}...")
     except Exception as e:
-        print(f"[跳过]: Gemini描述生成失败 {e}")
+        print(f"   [跳过]: Gemini描述生成失败 {e}")
         return
+
+    # 4. 智能分类 & 移动文件
+    print(f"   正在智能分类 (选项: {topics})...")
+    category = "Uncategorized"
+    try:
+        classify_prompt = (
+            f"基于以下图片描述，将图片归类为[{topics}]中的一项。\n"
+            f"只返回类别名称，不要标点符号。\n\n"
+            f"图片描述：{desc}"
+        )
+        category = ai.chat_with_gemini(classify_prompt).strip()
+        category = category.replace("'", "").replace('"', "").replace(".", "")
+        print(f"   分类结果: {category}")
+        
+        new_path = move_file_to_category(file_path, category, file_type="image")
+        if new_path:
+            file_path = new_path
+            
+    except Exception as e:
+        print(f"   [警告] 分类或移动失败: {e}")
     
-    # 3. 描述向量化
+    # 5. 描述向量化
     gemini_vec = ai.get_gemini_embedding(desc)
 
-    # 4. 入库
-    db.add_image(file_path, clip_vec, desc, gemini_vec)
-    print("图片已双路入库。")
+    # 6. 入库
+    db.add_image(file_path, clip_vec, desc, gemini_vec, category=category)
+    print("   图片处理完成。")
 
 
 # 主程序
@@ -113,6 +138,7 @@ def main():
     # 4. 添加图片
     add_i = subparsers.add_parser("add_image", help="添加单张图片")
     add_i.add_argument("path", help="图片路径")
+    add_i.add_argument("--topics", default="Model_Architecture,Performance_Plot,Table,Qualitative_Visualization,Algorithm_Math", help="分类选项")
 
     # 5. 搜图片
     search_i = subparsers.add_parser("search_image", help="搜图片")
@@ -127,6 +153,7 @@ def main():
     batch_p = subparsers.add_parser("batch_ingest", help="批量扫描文件夹处理所有文件")
     batch_p.add_argument("folder", help="文件夹路径")
     batch_p.add_argument("--topics", default="Reinforcement_Learning,Spatio-Temporal_Mining,Multimodal_Learning", help="论文分类选项")
+    batch_p.add_argument("--img_topics", default="Model_Architecture,Performance_Plot,Table,Qualitative_Visualization,Algorithm_Math", help="图片分类选项")
 
     args = parser.parse_args()
 
@@ -154,7 +181,7 @@ def main():
     # 2. 单个处理图片
     elif args.command == "add_image":
         if os.path.exists(args.path):
-            process_image(ai, db, args.path)
+            process_image(ai, db, args.path, topics=args.topics)
         else:
             print("[错误] 文件不存在")
 
@@ -181,7 +208,7 @@ def main():
                     process_paper(ai, db, full_path, args.topics)
                     count_pdf += 1
                 elif ext in ['.jpg', '.jpeg', '.png', '.bmp', '.webp']:
-                    process_image(ai, db, full_path)
+                    process_image(ai, db, full_path, topics=args.img_topics)
                     count_img += 1
         
         print(f"\n批量处理完成！PDF: {count_pdf}, IMG: {count_img}")
@@ -199,9 +226,12 @@ def main():
             print("[提示] 无相关信息。")
             return
 
-        print("\n参考片段")
+        print("\n--- 参考片段")
         for i, meta in enumerate(metas):
-            print(f"[{i+1}] {meta.get('source', '未知')} (P.{meta.get('page', '?')})")
+            # 防止旧数据报错
+            src = meta.get('source', '未知')
+            page = meta.get('page', '?')
+            print(f"[{i+1}] {src} (P.{page})")
 
         print("\nGemini 回答:")
         context = "\n\n".join(docs)
@@ -213,10 +243,7 @@ def main():
     elif args.command == "list_papers":
         print(f"正在索引主题: '{args.topic}' ...")
         
-        # 1. 向量化查询
         query_vec = ai.get_gemini_embedding(args.topic)
-        
-        # 2. 扩大搜索范围 取前20个相关片段，以覆盖更多文件
         results = db.search_paper(query_vec, n_results=20)
         
         metas = results['metadatas'][0]
@@ -226,38 +253,35 @@ def main():
             print("[提示] 未找到相关论文。")
             return
 
-        # 3. 聚合与去重
         found_files = {} 
-        # { "filename": {"path": full_path, "score": distance, "count": 1} }
-
         for meta, dist in zip(metas, distances):
-            path = meta.get('source', 'Unknown')
+            path = meta.get('path', meta.get('source', 'Unknown')) # 优先取全路径
             filename = os.path.basename(path)
             
             if filename not in found_files:
                 found_files[filename] = {
                     "path": path,
-                    "score": dist, # 越小越相关
+                    "score": dist,
+                    "category": meta.get('category', 'Unknown'), # 顺便取出分类
                     "count": 1
                 }
             else:
                 found_files[filename]["count"] += 1
-                # 如果发现了更相关的段落，更新分数
                 if dist < found_files[filename]["score"]:
                     found_files[filename]["score"] = dist
 
-        # 4. 排序
         sorted_files = sorted(found_files.items(), key=lambda x: x[1]['score'])
 
         print(f"\n找到 {len(sorted_files)} 篇相关论文 (按相关度排序):\n")
-        print(f"{'序号':<5} {'匹配度':<10} {'文件名'}")
-        print("-" * 60)
+        print(f"{'序号':<5} {'匹配度':<8} {'分类':<20} {'文件名'}")
+        print("-" * 70)
         
         for i, (fname, info) in enumerate(sorted_files):
             relevance = max(0, (1 - info['score'])) * 100 
-            print(f"[{i+1}]   {relevance:.1f}%      {fname}")
+            cat = info['category'][:20] # 截断一下防止太长
+            print(f"[{i+1}]   {relevance:.1f}%     {cat:<20} {fname}")
 
-        print("-" * 60)
+        print("-" * 70)
 
 
     # 6. 搜图片
@@ -271,7 +295,8 @@ def main():
             print("[语义匹配]")
             for i, meta in enumerate(gemini_results['metadatas'][0]):
                 desc = meta.get('desc', '')[:30].replace('\n', ' ')
-                print(f"  {i+1}. {os.path.basename(meta['path'])} | {desc}...")
+                cat = meta.get('category', '')
+                print(f"  {i+1}. [{cat}] {os.path.basename(meta['path'])} | {desc}...")
         
         # B. CLIP
         try:
