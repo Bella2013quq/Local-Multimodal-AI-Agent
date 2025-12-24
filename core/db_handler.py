@@ -96,7 +96,6 @@ class DatabaseHandler:
         )
         print(f"图片已双路更新/存入: {file_name} (分类: {category})")
 
-    # --- 搜索接口保持不变 ---
     def search_paper(self, query_vec, n_results=3):
         return self.paper_collection.query(query_embeddings=[query_vec], n_results=n_results)
 

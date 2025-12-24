@@ -11,13 +11,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DB_PATH = "./my_knowledge_base"
 MODEL_PATH_CLIP = "openai/clip-vit-base-patch32"
 
-# core/config.py
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
 # 资料库路径配置 
 LIBRARY_ROOT = "./"  
 

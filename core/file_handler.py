@@ -25,7 +25,7 @@ def move_file_to_category(file_path, category, file_type="paper"):
     :param file_type: 'paper' 或 'image'，决定了文件去 PAPERS_ROOT 还是 IMAGES_ROOT
     """
     try:
-        # 1. 决定去哪里 (Papers 库还是 Images 库？)
+        # 1. 决定去哪里 (Papers 库还是 Images 库)
         if file_type == "paper":
             base_root = PAPERS_ROOT
         elif file_type == "image":
@@ -37,7 +37,6 @@ def move_file_to_category(file_path, category, file_type="paper"):
         # 2. 拼接目标路径
         target_dir = os.path.join(base_root, category)
         
-        # 创建文件夹
         if not os.path.exists(target_dir):
             os.makedirs(target_dir)
             

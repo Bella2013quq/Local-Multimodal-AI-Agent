@@ -89,7 +89,6 @@ class AIHandler:
         """图片问答"""
         try:
             img = PIL.Image.open(image_path)
-            # [修正] 这里原来写成了 self.model，应改为 self.gemini_flash
             response = self.gemini_flash.generate_content([user_question, img])
             return response.text
         except Exception as e:
