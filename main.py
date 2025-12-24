@@ -8,12 +8,9 @@ from core.db_handler import DatabaseHandler
 from core.file_handler import read_pdf_chunks, move_file_to_category
 
 from dotenv import load_dotenv
-load_dotenv()   # 会自动读取 .env
+load_dotenv()  
 
 from core.config import GEMINI_API_KEY
-
-
-# 核心处理函数
 
 def process_paper(ai, db, file_path, topics):
     """处理单篇 PDF 论文的逻辑"""
@@ -239,50 +236,62 @@ def main():
         answer = ai.chat_with_gemini(prompt)
         print(answer)
 
-    # 5. 文件索引 (List Papers)
     elif args.command == "list_papers":
         print(f"正在索引主题: '{args.topic}' ...")
         
+        # 1. 向量搜索 
         query_vec = ai.get_gemini_embedding(args.topic)
-        results = db.search_paper(query_vec, n_results=20)
+        results = db.search_paper(query_vec, n_results=15)
         
         metas = results['metadatas'][0]
-        distances = results['distances'][0]
-
         if not metas:
             print("[提示] 未找到相关论文。")
             return
 
-        found_files = {} 
-        for meta, dist in zip(metas, distances):
-            path = meta.get('path', meta.get('source', 'Unknown')) # 优先取全路径
+        # 2. 聚合候选文件
+        candidate_files = {}
+        for meta in metas:
+            path = meta.get('path', meta.get('source', 'Unknown'))
             filename = os.path.basename(path)
+            category = meta.get('category', 'Unknown')
             
-            if filename not in found_files:
-                found_files[filename] = {
-                    "path": path,
-                    "score": dist,
-                    "category": meta.get('category', 'Unknown'), # 顺便取出分类
-                    "count": 1
+            # 记录下来，稍后发给 Gemini
+            if filename not in candidate_files:
+                candidate_files[filename] = {
+                    "category": category,
+                    "source_path": path
                 }
-            else:
-                found_files[filename]["count"] += 1
-                if dist < found_files[filename]["score"]:
-                    found_files[filename]["score"] = dist
 
-        sorted_files = sorted(found_files.items(), key=lambda x: x[1]['score'])
+        print(f"向量库初筛找到 {len(candidate_files)} 篇候选论文，正在进行 AI 重排序...")
 
-        print(f"\n找到 {len(sorted_files)} 篇相关论文 (按相关度排序):\n")
-        print(f"{'序号':<5} {'匹配度':<8} {'分类':<20} {'文件名'}")
-        print("-" * 70)
-        
-        for i, (fname, info) in enumerate(sorted_files):
-            relevance = max(0, (1 - info['score'])) * 100 
-            cat = info['category'][:20] # 截断一下防止太长
-            print(f"[{i+1}]   {relevance:.1f}%     {cat:<20} {fname}")
+        # 3. 构造 Prompt 进行重排序 
+        # 将候选列表转为文本
+        candidates_text = ""
+        for i, (fname, info) in enumerate(candidate_files.items()):
+            candidates_text += f"{i+1}. 文件名: {fname} (分类: {info['category']})\n"
 
-        print("-" * 70)
+        rerank_prompt = (
+            f"用户正在寻找关于 '{args.topic}' 的论文。\n"
+            f"向量数据库找出了以下候选文件，请你判断哪些文件真正与主题高度相关，并按相关性从高到低排序。\n"
+            f"请排除掉明显不相关的文件（例如只是提到了关键词但核心主题不符的）。\n\n"
+            f"候选列表：\n{candidates_text}\n\n"
+            f"请输出一个简洁的列表，格式如下：\n"
+            f"1. [相关度: 高/中/低] 文件名 - 一句话解释为什么相关\n"
+        )
 
+        # 4. 让 Gemini 进行最终裁决
+        try:
+            ranking_result = ai.chat_with_gemini(rerank_prompt)
+            print("\n" + "="*30)
+            print(f"Gemini 智能筛选结果 (主题: {args.topic})")
+            print("="*30)
+            print(ranking_result)
+            print("="*30)
+        except Exception as e:
+            print(f"[错误] 重排序失败: {e}")
+            # 如果 AI 失败，回退到简单的列表展示
+            for fname in candidate_files:
+                print(f"- {fname}")
 
     # 6. 搜图片
     elif args.command == "search_image":
@@ -321,7 +330,7 @@ def main():
             best_path = res_g['metadatas'][0][0]['path']
             print(f"[Gemini] 锁定: {os.path.basename(best_path)}")
         
-        # 2. CLIP (fallback)
+        # 2. CLIP 
         if not best_path:
             try:
                 c_vec = ai.get_clip_text_embedding(args.desc)
