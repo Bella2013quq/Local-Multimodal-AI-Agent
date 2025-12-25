@@ -185,13 +185,13 @@ Local-Multimodal-AI-Agent/
 
 |           CLIP搜索结果展示            |          Gemini优化后搜索结果展示          |
 | :-----------------------------: | :-------------------------------: |
-| ![语义搜索截图A](./report/7-1-2-CLIP) | ![语义搜索截图B](./report/7-1-2-Gemini) |
+| ![语义搜索截图A](./report/7-1-2-CLIP.png) | ![语义搜索截图B](./report/7-1-2-Gemini.png) |
 	在只使用CLIP查询时，出现了语义漂移，提问为图片分类，SAC（强化学习任务）排到了 CLIP（多模态图像分类）前面。这可能是由于通用术语对CLIP产生了干扰。
 	在使用Gemini进行二次排序后，由于其丰富的上下文联系能力，判断准确了许多。
 	
 3. 列出相关论文
 
-![列出相关论文的演示](./report/7-1-3-列出相关论文)
+![列出相关论文的演示](./report/7-1-3-列出相关论文.png)
 ### 7.2 图像管理功能展示
 
 1. 添加图片并且自动分类
@@ -219,12 +219,12 @@ Local-Multimodal-AI-Agent/
 
 图片分类效果展示：
 
-| **Algorithm_Math**            | ![添加图片](./lgorithm_Math/6.png)                 |
+| **Algorithm_Math**            | ![添加图片](./images/Algorithm_Math/6.png)                 |
 | ----------------------------- | ------------------------------------------ |
-| **Model_Architecture**        | **![添加图片](./Model_Architecture/1.png)**        |
-| **Performance_Plot**          | **![添加图片](./Performance_Plot/5.png)**          |
-| **Qualitative_Visualization** | **![添加图片](./Qualitative_Visualization/7.png)** |
-| **Table**                     | **![添加图片](./Table/4.png)**                     |
+| **Model_Architecture**        | **![添加图片](./images/Model_Architecture/1.png)**        |
+| **Performance_Plot**          | **![添加图片](./images/Performance_Plot/5.png)**          |
+| **Qualitative_Visualization** | **![添加图片](./images/Qualitative_Visualization/7.png)** |
+| **Table**                     | **![添加图片](./images/Table/4.png)**                     |
 
 ### 7.3 演示视频
 
