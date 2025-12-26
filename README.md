@@ -212,11 +212,15 @@ Local-Multimodal-AI-Agent/
 
 分类前文件夹：
 
-![添加图片](./report/7-3-mix.png)
+<div align="center">
+  <img src="./report/7-3-mix.png" alt="分类前文件夹" width="50%" />
+</div>
 
 论文分类效果展示：
 
-![论文的分类](./report/7-3-文件分类.png)
+<div align="center">
+  <img src="./report/7-3-文件分类.png" alt="论文的分类" width="50%" />
+</div>
 
 图片分类效果展示：
 
